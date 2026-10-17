@@ -37,7 +37,7 @@ export class UsersService {
   }
 
   async update(id: string, dto: UpdateUserDto) {
-    const updated = await this.usersRepository.update(id, dto);
+    await this.usersRepository.update(id, dto);
     if (dto.status === $Enums.UserStatus.BLOCKED) {
       await this.prisma.session.updateMany({
         where: { userId: id, revokedAt: null },
