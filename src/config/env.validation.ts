@@ -72,6 +72,10 @@ class EnvironmentVariables {
   @IsOptional()
   CORS_ORIGINS?: string;
 
+  @IsString()
+  @IsOptional()
+  COOKIE_SECURE?: string;
+
   @IsNumber()
   @IsOptional()
   THROTTLE_TTL_MS: number = 60000;

@@ -134,9 +134,13 @@ export class AuthController {
   }
 
   private cookieOptions(): CookieOptions {
+    const cookieSecure =
+      process.env.COOKIE_SECURE !== undefined
+        ? process.env.COOKIE_SECURE === 'true'
+        : process.env.NODE_ENV === 'production';
     return {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: cookieSecure,
       sameSite: 'lax',
       path: REFRESH_COOKIE_PATH,
     };
