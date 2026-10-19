@@ -8,7 +8,6 @@ import { createHash, randomBytes } from 'node:crypto';
 import { generateSecret, generateURI, verify } from 'otplib';
 import { MfaRepository } from './mfa.repository.js';
 import { UsersService } from '../users/users.service.js';
-import { AuthService } from '../auth/auth.service.js';
 import { WebhookDispatcherService } from '../clients/webhook-dispatcher.service.js';
 import { encryptSecret, decryptSecret } from './encryption.util.js';
 
@@ -37,7 +36,6 @@ export class MfaService {
   constructor(
     private readonly mfaRepository: MfaRepository,
     private readonly usersService: UsersService,
-    private readonly authService: AuthService,
     private readonly webhookDispatcherService: WebhookDispatcherService,
   ) {}
 
@@ -216,18 +214,6 @@ export class MfaService {
 
     this.challenges.delete(challengeId);
     return { userId: challenge.userId };
-  }
-
-  /**
-   * Issues a fresh token pair after a successful MFA challenge.
-   * Delegates session creation + access-token signing to AuthService.
-   */
-  async issueTokensAfterChallenge(
-    userId: string,
-    ip?: string,
-    userAgent?: string,
-  ): Promise<{ accessToken: string; refreshToken: string }> {
-    return this.authService.issueTokensForUser(userId, { ip, userAgent });
   }
 
   private async consumeRecoveryCode(

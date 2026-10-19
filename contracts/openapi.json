@@ -1039,6 +1039,127 @@
         ]
       }
     },
+    "/security-policies": {
+      "get": {
+        "operationId": "SecurityPoliciesController_getAllPolicies",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "SecurityPolicies"
+        ]
+      },
+      "post": {
+        "operationId": "SecurityPoliciesController_createPolicy",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSecurityPolicyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "SecurityPolicies"
+        ]
+      }
+    },
+    "/security-policies/{key}": {
+      "get": {
+        "operationId": "SecurityPoliciesController_getPolicyByKey",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "SecurityPolicies"
+        ]
+      },
+      "put": {
+        "operationId": "SecurityPoliciesController_updatePolicy",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSecurityPolicyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "SecurityPolicies"
+        ]
+      },
+      "patch": {
+        "operationId": "SecurityPoliciesController_patchPolicy",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSecurityPolicyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "SecurityPolicies"
+        ]
+      }
+    },
     "/orgs": {
       "get": {
         "operationId": "OrganizationsController_findAll",
@@ -2217,6 +2338,14 @@
         "properties": {}
       },
       "MfaChallengeDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateSecurityPolicyDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateSecurityPolicyDto": {
         "type": "object",
         "properties": {}
       },

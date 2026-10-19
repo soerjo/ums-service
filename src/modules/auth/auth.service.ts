@@ -1,4 +1,4 @@
-import { forwardRef } from '@nestjs/common';
+import { forwardRef, ForbiddenException } from '@nestjs/common';
 import {
   BadRequestException,
   Injectable,
@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import { $Enums } from '@prisma/client';
 import type { User } from '@prisma/client';
+import { SecurityPoliciesService } from '../security-policies/security-policies.service.js';
 import { UsersRepository } from '../users/users.repository.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { parseDurationToSeconds } from '../../common/utils/token-expiry.util.js';
@@ -21,11 +22,13 @@ import {
   sha256Hex,
 } from '../../common/utils/hash.util.js';
 import { JWT_AZP } from './auth.constants.js';
+import { SecurityPolicyKeyEnum } from '../security-policies/security-policies.types.js';
 import { AuthTokensRepository } from './auth-tokens.repository.js';
 import type { MailSender } from '../mail/mail.types.js';
 import { Inject } from '@nestjs/common';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface.js';
 import { WebhookDispatcherService } from '../clients/webhook-dispatcher.service.js';
+import { MfaService } from '../mfa/mfa.service.js';
 import type { RegisterDto } from './dto/register.dto.js';
 import { AuditService } from '../audit/audit.service.js';
 
@@ -57,6 +60,9 @@ export class AuthService {
     private configService: ConfigService,
     private prisma: PrismaService,
     private authTokensRepository: AuthTokensRepository,
+    private securityPoliciesService: SecurityPoliciesService,
+    @Inject(forwardRef(() => MfaService))
+    private mfaService: MfaService,
     @Inject('MailSender') private mailSender: MailSender,
     private auditService: AuditService,
     @Inject(forwardRef(() => WebhookDispatcherService))
@@ -64,8 +70,11 @@ export class AuthService {
   ) {}
 
   private get accessTokenTtlSeconds(): number {
-    return parseDurationToSeconds(
-      this.configService.get<string>('JWT_ACCESS_EXPIRATION') ?? '15m',
+    return this.securityPoliciesService.getPolicy<number>(
+      SecurityPolicyKeyEnum.AccessTokenTtlSeconds,
+      parseDurationToSeconds(
+        this.configService.get<string>('JWT_ACCESS_EXPIRATION') ?? '15m',
+      ),
     );
   }
 
@@ -151,15 +160,21 @@ export class AuthService {
    * downstream services can authorize without calling UMS.
    */
   buildAccessToken(user: AuthUser): string {
-    return this.jwtService.sign({
-      sub: user.id,
-      email: user.email,
-      name: user.name,
-      roles: user.roles,
-      orgs: user.orgs,
-      perms: user.perms,
-      azp: JWT_AZP,
-    });
+    const ttl = this.accessTokenTtlSeconds;
+    return this.jwtService.sign(
+      {
+        sub: user.id,
+        email: user.email,
+        name: user.name,
+        roles: user.roles,
+        orgs: user.orgs,
+        perms: user.perms,
+        azp: JWT_AZP,
+      },
+      typeof ttl === 'number' && !Number.isNaN(ttl) && ttl > 0
+        ? { expiresIn: ttl }
+        : undefined,
+    );
   }
 
   private async createSession(
@@ -167,6 +182,33 @@ export class AuthService {
     family: string,
     meta: RequestMeta,
   ): Promise<{ refreshToken: string; refreshHash: string; expiresAt: Date }> {
+    const maxActiveSessions = this.securityPoliciesService.getPolicy<number>(
+      SecurityPolicyKeyEnum.MaxActiveSessionsPerUser,
+      5,
+    );
+
+    if (maxActiveSessions > 0) {
+      const activeSessions = await this.prisma.session.findMany({
+        where: {
+          userId,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      if (activeSessions.length >= maxActiveSessions) {
+        const excess = activeSessions.length - maxActiveSessions + 1;
+        const toRevoke = activeSessions.slice(0, excess);
+        for (const session of toRevoke) {
+          await this.prisma.session.update({
+            where: { id: session.id },
+            data: { revokedAt: new Date() },
+          });
+        }
+      }
+    }
+
     const refreshToken = generateOpaqueToken();
     const refreshHash = sha256Hex(refreshToken);
     const expiresAt = new Date(Date.now() + this.refreshTokenTtlSeconds * 1000);
@@ -240,6 +282,20 @@ export class AuthService {
   }
 
   async login(user: AuthUser, meta: RequestMeta = {}): Promise<IssuedTokens> {
+    const enforceMfa = this.securityPoliciesService.getPolicy<boolean>(
+      SecurityPolicyKeyEnum.EnforceMfa,
+      false,
+    );
+
+    if (enforceMfa) {
+      const mfaEnabled = await this.mfaService.isEnabled(user.id);
+      if (!mfaEnabled) {
+        throw new ForbiddenException(
+          'MFA is required by organization security policy. Please enroll in MFA before logging in.',
+        );
+      }
+    }
+
     const { refreshToken } = await this.createSession(
       user.id,
       randomUUID(),

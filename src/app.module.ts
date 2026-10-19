@@ -13,6 +13,7 @@ import { AuditModule } from './modules/audit/audit.module.js';
 import { HealthModule } from './modules/health/health.module.js';
 import { MetricsModule } from './modules/metrics/metrics.module.js';
 import { MfaModule } from './modules/mfa/mfa.module.js';
+import { SecurityPoliciesModule } from './modules/security-policies/security-policies.module.js';
 import { SessionsModule } from './modules/sessions/sessions.module.js';
 import { ClientsModule } from './modules/clients/clients.module.js';
 import { FederationModule } from './modules/federation/federation.module.js';
@@ -44,6 +45,7 @@ import { validate } from './config/env.validation.js';
     SessionsModule,
     AuditModule,
     MfaModule,
+    SecurityPoliciesModule,
     HealthModule,
     MetricsModule,
     ClientsModule,

@@ -17,6 +17,7 @@ import { AuthTokensRepository } from './auth-tokens.repository.js';
 import { MailModule } from '../mail/mail.module.js';
 import { AuditModule } from '../audit/audit.module.js';
 import { MfaModule } from '../mfa/mfa.module.js';
+import { SecurityPoliciesModule } from '../security-policies/security-policies.module.js';
 import { JWT_ISSUER } from './auth.constants.js';
 import type { JwtModuleOptions } from '@nestjs/jwt';
 
@@ -28,6 +29,7 @@ import type { JwtModuleOptions } from '@nestjs/jwt';
     MailModule,
     AuditModule,
     forwardRef(() => MfaModule),
+    SecurityPoliciesModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

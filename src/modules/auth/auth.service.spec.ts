@@ -8,6 +8,8 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { AuthService } from './auth.service.js';
 import { WebhookDispatcherService } from '../clients/webhook-dispatcher.service.js';
 import { AuditService } from '../audit/audit.service.js';
+import type { SecurityPoliciesService } from '../security-policies/security-policies.service.js';
+import type { MfaService } from '../mfa/mfa.service.js';
 import { AuthTokensRepository } from './auth-tokens.repository.js';
 import { hashPassword } from '../../common/utils/password.util.js';
 import { sha256Hex } from '../../common/utils/hash.util.js';
@@ -91,6 +93,9 @@ describe('AuthService', () => {
           sessions.push(session);
           return Promise.resolve(session);
         }),
+        findMany: jest.fn(() =>
+          Promise.resolve(sessions.filter((s) => s.revokedAt === null)),
+        ),
         findUnique: jest.fn(({ where }: { where: { refreshHash: string } }) =>
           Promise.resolve(
             sessions.find((s) => s.refreshHash === where.refreshHash) ?? null,
@@ -152,6 +157,17 @@ describe('AuthService', () => {
       configService as unknown as ConfigService,
       prisma as unknown as PrismaService,
       {} as unknown as AuthTokensRepository,
+      {
+        getPolicy: jest.fn(
+          (_key: string, defaultValue: unknown): unknown => defaultValue,
+        ),
+        getAllPolicies: jest.fn().mockResolvedValue([]),
+        getPolicyByKey: jest.fn().mockResolvedValue(null),
+        setPolicy: jest.fn().mockResolvedValue(null),
+      } as unknown as SecurityPoliciesService,
+      {
+        isEnabled: jest.fn().mockResolvedValue(false),
+      } as unknown as MfaService,
       { sendPasswordReset: jest.fn(), sendEmailVerification: jest.fn() },
       {
         log: jest.fn().mockResolvedValue(undefined),
@@ -420,6 +436,72 @@ describe('AuthService', () => {
           },
         },
       });
+    });
+  });
+
+  describe('Security Policies Enforcement', () => {
+    it('enforces maxActiveSessionsPerUser by revoking oldest active session', async () => {
+      const getPolicyMock = jest
+        .fn<unknown, [string, unknown]>()
+        .mockImplementation((key: string, defaultValue: unknown): unknown => {
+          if (key === 'maxActiveSessionsPerUser') return 2;
+          return defaultValue;
+        });
+      (
+        service as unknown as {
+          securityPoliciesService: { getPolicy: jest.Mock };
+        }
+      ).securityPoliciesService.getPolicy = getPolicyMock;
+
+      const sessionFindManyMock = jest.fn().mockResolvedValue([
+        { id: 'old-session-1', createdAt: new Date(Date.now() - 10000) },
+        { id: 'old-session-2', createdAt: new Date(Date.now() - 5000) },
+      ]);
+      const sessionUpdateMock = jest.fn().mockResolvedValue({});
+
+      const prismaRef = (
+        service as unknown as {
+          prisma: {
+            session: {
+              findMany: jest.Mock;
+              update: jest.Mock;
+              create: jest.Mock;
+            };
+          };
+        }
+      ).prisma;
+      prismaRef.session.findMany = sessionFindManyMock;
+      prismaRef.session.update = sessionUpdateMock;
+
+      await service.login(authUser);
+
+      expect(sessionUpdateMock).toHaveBeenCalledWith({
+        where: { id: 'old-session-1' },
+        data: { revokedAt: expect.any(Date) as Date },
+      });
+    });
+
+    it('enforces enforceMfa policy and throws ForbiddenException if user has not enabled TOTP', async () => {
+      const getPolicyMock = jest
+        .fn<unknown, [string, unknown]>()
+        .mockImplementation((key: string, defaultValue: unknown): unknown => {
+          if (key === 'enforceMfa') return true;
+          return defaultValue;
+        });
+      (
+        service as unknown as {
+          securityPoliciesService: { getPolicy: jest.Mock };
+        }
+      ).securityPoliciesService.getPolicy = getPolicyMock;
+
+      const mfaServiceRef = (
+        service as unknown as { mfaService: { isEnabled: jest.Mock } }
+      ).mfaService;
+      mfaServiceRef.isEnabled = jest.fn().mockResolvedValue(false);
+
+      await expect(service.login(authUser)).rejects.toThrow(
+        /MFA is required by organization security policy/,
+      );
     });
   });
 });

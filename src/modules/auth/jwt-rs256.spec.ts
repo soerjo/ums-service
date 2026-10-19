@@ -1,3 +1,5 @@
+import type { SecurityPoliciesService } from '../security-policies/security-policies.service.js';
+import type { MfaService } from '../mfa/mfa.service.js';
 import { generateKeyPairSync, type KeyObject } from 'node:crypto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -56,13 +58,62 @@ describe('RS256 access token signing (UMS contract)', () => {
     const configService = {
       get: jest.fn(() => undefined),
     };
+    const mockPrismaService = {
+      onModuleInit: jest.fn(),
+      onModuleDestroy: jest.fn(),
+      $connect: jest.fn(),
+      $disconnect: jest.fn(),
+      logger: {
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        debug: jest.fn(),
+        verbose: jest.fn(),
+      },
+    };
+
+    const mockSecurityPoliciesService = {
+      logger: {
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        debug: jest.fn(),
+        verbose: jest.fn(),
+      },
+      policiesCache: {},
+      prisma: mockPrismaService,
+      loadAndSeedPolicies: jest.fn().mockResolvedValue(undefined),
+      getPolicy: jest.fn(),
+      getAllPolicies: jest.fn(),
+      getPolicyByKey: jest.fn(),
+      setPolicy: jest.fn(),
+      createPolicy: jest.fn(),
+      updatePolicy: jest.fn(),
+    };
+
+    const mockMfaService = {
+      isEnabled: jest.fn().mockResolvedValue(false),
+      challenges: {},
+      mfaRepository: {},
+      usersService: {},
+      authService: {},
+      webhookDispatcherService: {},
+      enroll: jest.fn(),
+      confirm: jest.fn(),
+      disable: jest.fn(),
+      createChallenge: jest.fn(),
+      verifyChallenge: jest.fn(),
+      issueTokensAfterChallenge: jest.fn(),
+    };
 
     service = new AuthService(
       {} as unknown as UsersRepository,
       signer,
       configService as unknown as ConfigService,
-      {} as unknown as PrismaService,
+      mockPrismaService as unknown as PrismaService,
       {} as unknown as AuthTokensRepository,
+      mockSecurityPoliciesService as unknown as SecurityPoliciesService,
+      mockMfaService as unknown as MfaService,
       { sendPasswordReset: jest.fn(), sendEmailVerification: jest.fn() },
       {
         log: jest.fn().mockResolvedValue(undefined),

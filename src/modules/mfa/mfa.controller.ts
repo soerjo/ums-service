@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { Public } from '../../common/decorators/public.decorator.js';
 import { MfaService } from './mfa.service.js';
+import { AuthService } from '../auth/auth.service.js';
 import {
   MfaConfirmDto,
   MfaDisableDto,
@@ -11,7 +12,10 @@ import {
 
 @Controller('mfa')
 export class MfaController {
-  constructor(private readonly mfaService: MfaService) {}
+  constructor(
+    private readonly mfaService: MfaService,
+    private readonly authService: AuthService,
+  ) {}
 
   @Post('enroll')
   @HttpCode(200)
@@ -46,11 +50,10 @@ export class MfaController {
     );
     const ip = req.ip;
     const userAgent = req.get('user-agent') ?? undefined;
-    const tokens = await this.mfaService.issueTokensAfterChallenge(
-      userId,
+    const tokens = await this.authService.issueTokensForUser(userId, {
       ip,
       userAgent,
-    );
+    });
     res.cookie('ums_refresh_token', tokens.refreshToken, {
       httpOnly: true,
       sameSite: 'lax',

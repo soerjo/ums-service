@@ -241,3 +241,15 @@ model IdentityProvider {
 
   @@map("identity_providers")
 }
+
+model SecurityPolicy {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       Json
+  description String?
+  updatedBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("security_policies")
+}
