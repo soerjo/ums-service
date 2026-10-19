@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { appendFileSync } from 'node:fs';
 import * as nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 import { MailSendResult, MailSender, MailTransportMode } from './mail.types.js';
@@ -23,6 +24,7 @@ export class NodemailerMailService implements MailSender {
   private readonly mode: MailTransportMode;
   private readonly from: string;
   private readonly transporter: Transporter | null;
+  private readonly logFile: string | null;
 
   constructor(configService: ConfigService) {
     const rawMode = (
@@ -36,6 +38,7 @@ export class NodemailerMailService implements MailSender {
     }
     this.from =
       configService.get<string>('MAIL_FROM') ?? 'ums-service@localhost';
+    this.logFile = configService.get<string>('MAIL_LOG_FILE')?.trim() || null;
 
     if (this.mode === 'smtp') {
       const host = configService.get<string>('SMTP_HOST');
@@ -97,6 +100,24 @@ export class NodemailerMailService implements MailSender {
           subject,
           link,
         });
+        if (this.logFile) {
+          // Optional sink for E2E tests: same JSON line, appended one per send.
+          try {
+            appendFileSync(
+              this.logFile,
+              `${JSON.stringify({ event: 'mail.log-transport', transport: 'log', to, subject, link })}\n`,
+            );
+          } catch (fileError) {
+            this.logger.warn({
+              event: 'mail.log-file-failed',
+              file: this.logFile,
+              error:
+                fileError instanceof Error
+                  ? fileError.message
+                  : String(fileError),
+            });
+          }
+        }
         return { delivered: true, transport: 'log' };
       }
 

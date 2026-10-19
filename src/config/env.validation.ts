@@ -133,6 +133,12 @@ class EnvironmentVariables {
   @IsOptional()
   MAIL_FROM?: string;
 
+  // When set (dev/log transport only), each composed message is appended to
+  // this file as one JSON line so E2E tests can capture the token-bearing link.
+  @IsString()
+  @IsOptional()
+  MAIL_LOG_FILE?: string;
+
   @IsString()
   @IsOptional()
   APP_WEB_URL: string = 'http://localhost:5173';
