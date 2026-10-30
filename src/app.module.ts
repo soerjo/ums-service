@@ -16,6 +16,7 @@ import { MfaModule } from './modules/mfa/mfa.module.js';
 import { SessionsModule } from './modules/sessions/sessions.module.js';
 import { ClientsModule } from './modules/clients/clients.module.js';
 import { SecurityPoliciesModule } from './modules/security-policies/security-policies.module.js';
+import { OutboxModule } from './modules/outbox/outbox.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { RolesGuard } from './common/guards/roles.guard.js';
 import { loggerConfig } from './config/logger.config.js';
@@ -48,6 +49,7 @@ import { validate } from './config/env.validation.js';
     MetricsModule,
     ClientsModule,
     SecurityPoliciesModule,
+    OutboxModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

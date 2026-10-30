@@ -1557,6 +1557,36 @@
         ]
       }
     },
+    "/permissions/register": {
+      "post": {
+        "operationId": "PermissionsController_registerManifest",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterPermissionsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Bulk register permission manifest for downstream services",
+        "tags": [
+          "Permissions"
+        ]
+      }
+    },
     "/permissions/{id}": {
       "get": {
         "operationId": "PermissionsController_findOne",
@@ -2239,6 +2269,45 @@
         },
         "required": [
           "name"
+        ]
+      },
+      "RegisterPermissionItemDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "order:read",
+            "description": "Permission name in 'resource:action' format"
+          },
+          "description": {
+            "type": "string",
+            "example": "Can read order details and listing",
+            "description": "Optional description of the permission"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "RegisterPermissionsDto": {
+        "type": "object",
+        "properties": {
+          "serviceName": {
+            "type": "string",
+            "example": "pos-service",
+            "description": "Name of the service registering permissions"
+          },
+          "permissions": {
+            "description": "List of permissions defined by the service",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RegisterPermissionItemDto"
+            }
+          }
+        },
+        "required": [
+          "serviceName",
+          "permissions"
         ]
       },
       "UpdatePermissionDto": {
