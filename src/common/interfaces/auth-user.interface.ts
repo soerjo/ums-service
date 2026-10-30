@@ -5,4 +5,5 @@ export interface AuthUser {
   roles: string[];
   orgs: string[];
   perms: string[];
+  domainId?: string | null;
 }
