@@ -5,9 +5,9 @@ import { UserStatus } from '@prisma/client';
 import type { User } from '@prisma/client';
 import { UsersRepository } from '../users/users.repository.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { AuditService } from '../audit/audit.service.js';
 import { AuthService } from './auth.service.js';
 import { WebhookDispatcherService } from '../clients/webhook-dispatcher.service.js';
-import { AuditService } from '../audit/audit.service.js';
 import { SecurityPoliciesService } from '../security-policies/security-policies.service.js';
 import { OutboxService } from '../outbox/outbox.service.js';
 import { PasswordPolicyService } from './password-policy.service.js';
@@ -44,6 +44,7 @@ describe('AuthService', () => {
   let sessions: FakeSession[];
   let findById: jest.Mock;
   let findByEmail: jest.Mock;
+  let findByEmailAndDomain: jest.Mock;
   let updateManySession: jest.Mock;
   let updateSession: jest.Mock;
   let createUser: jest.Mock;
@@ -68,12 +69,19 @@ describe('AuthService', () => {
     roles: ['ums:admin'],
     orgs: ['pesanggrahan'],
     perms: ['users:read'],
+    domainId: null,
   };
 
   beforeEach(() => {
     sessions = [];
     findById = jest.fn();
     findByEmail = jest.fn();
+    findByEmailAndDomain = jest
+      .fn()
+      .mockImplementation(
+        (email: string, domainId: string | null) =>
+          findByEmail(email, domainId) as Promise<User | null>,
+      );
     createUser = jest.fn();
     userRoleFindMany = jest
       .fn()
@@ -166,6 +174,32 @@ describe('AuthService', () => {
           enabled: true,
         }),
       },
+      domain: {
+        findFirst: jest
+          .fn()
+          .mockImplementation(
+            ({
+              where,
+            }: {
+              where: { OR?: Array<{ id?: string; origin?: string }> };
+            }) => {
+              if (
+                where?.OR?.some(
+                  (c) =>
+                    c.id === 'invalid-domain' || c.origin === 'invalid-domain',
+                )
+              ) {
+                return null;
+              }
+              return {
+                id: 'dom-1',
+                name: 'Domain 1',
+                origin: 'https://app1.test',
+                isActive: true,
+              };
+            },
+          ),
+      },
     };
 
     const configService = {
@@ -186,7 +220,11 @@ describe('AuthService', () => {
     updateManySession = prisma.session.updateMany;
     updateSession = prisma.session.update;
     service = new AuthService(
-      { findById, findByEmail } as unknown as UsersRepository,
+      {
+        findById,
+        findByEmail,
+        findByEmailAndDomain,
+      } as unknown as UsersRepository,
       jwtService as unknown as JwtService,
       configService as unknown as ConfigService,
       prisma as unknown as PrismaService,
@@ -373,6 +411,47 @@ describe('AuthService', () => {
       await expect(
         service.validateUser('user@example.com', 'wrong-password'),
       ).resolves.toBeNull();
+    });
+
+    it('authenticates with domain identifier and returns domain user', async () => {
+      const passwordHash = await hashPassword('secret-password');
+      const domainUser: User = {
+        ...fullUser,
+        id: 'user-dom',
+        domainId: 'dom-1',
+        passwordHash,
+      };
+      findByEmail.mockResolvedValue(domainUser);
+      userRoleFindMany.mockResolvedValue([
+        {
+          role: {
+            name: 'domain:admin',
+            rolePermissions: [{ permission: { name: 'users:read' } }],
+          },
+        },
+      ]);
+      orgMemberFindMany.mockResolvedValue([]);
+
+      const result = await service.validateUser(
+        'user@example.com',
+        'secret-password',
+        'dom-1',
+      );
+      expect(result).not.toBeNull();
+      expect(result?.domainId).toBe('dom-1');
+    });
+
+    it('throws UnauthorizedException if domain is not registered or inactive', async () => {
+      const passwordHash = await hashPassword('secret-password');
+      findByEmail.mockResolvedValue({ ...fullUser, passwordHash });
+
+      await expect(
+        service.validateUser(
+          'user@example.com',
+          'secret-password',
+          'invalid-domain',
+        ),
+      ).rejects.toThrow(UnauthorizedException);
     });
   });
 

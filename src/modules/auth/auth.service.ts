@@ -140,6 +140,7 @@ export class AuthService {
       roles,
       orgs,
       perms,
+      domainId: user.domainId ?? null,
     };
   }
 
@@ -168,6 +169,7 @@ export class AuthService {
       perms: user.perms,
       sid: sessionId,
       azp: JWT_AZP,
+      dom: user.domainId ?? null,
     });
   }
 
@@ -223,10 +225,31 @@ export class AuthService {
   async validateUser(
     email: string,
     password: string,
+    domainIdentifier?: string,
   ): Promise<AuthUser | null> {
     await this.accountLockoutService.checkLockout(email);
+    let user: User | null = null;
+    if (domainIdentifier) {
+      const domain = await this.prisma.domain.findFirst({
+        where: {
+          OR: [{ id: domainIdentifier }, { origin: domainIdentifier }],
+          isActive: true,
+        },
+      });
+      if (!domain) {
+        throw new UnauthorizedException('Domain is not registered or inactive');
+      }
+      // Prioritas 1: akun khusus domain
+      user = await this.usersRepository.findByEmailAndDomain(email, domain.id);
+      // Prioritas 2: fallback ke akun global (domainId: null)
+      if (!user) {
+        user = await this.usersRepository.findByEmailAndDomain(email, null);
+      }
+    } else {
+      // Tanpa domain identifier: cari akun global
+      user = await this.usersRepository.findByEmailAndDomain(email, null);
+    }
 
-    const user = await this.usersRepository.findByEmail(email);
     if (!user || user.status !== $Enums.UserStatus.ACTIVE) {
       await this.accountLockoutService.recordFailedAttempt(email);
       return null;
@@ -239,7 +262,6 @@ export class AuthService {
     }
 
     await this.accountLockoutService.resetAttempts(email);
-
     const authUser = await this.toAuthUser(user);
     const policies = await this.securityPoliciesService.getPolicies();
 

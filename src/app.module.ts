@@ -7,6 +7,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 import { OrganizationsModule } from './modules/organizations/organizations.module.js';
+import { DomainsModule } from './modules/domains/domains.module.js';
 import { RolesModule } from './modules/roles/roles.module.js';
 import { PermissionsModule } from './modules/permissions/permissions.module.js';
 import { AuditModule } from './modules/audit/audit.module.js';
@@ -41,6 +42,7 @@ import { validate } from './config/env.validation.js';
     UsersModule,
     OrganizationsModule,
     RolesModule,
+    DomainsModule,
     PermissionsModule,
     SessionsModule,
     AuditModule,

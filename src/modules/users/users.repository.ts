@@ -63,8 +63,21 @@ export class UsersRepository {
     return user;
   }
 
-  async findByEmail(email: string) {
-    return this.prisma.user.findUnique({ where: { email } });
+  async findByEmail(email: string, domainId?: string | null) {
+    if (domainId !== undefined) {
+      if (domainId === null) {
+        return this.prisma.user.findFirst({ where: { email, domainId: null } });
+      }
+      return this.prisma.user.findFirst({ where: { email, domainId } });
+    }
+    return this.prisma.user.findFirst({ where: { email } });
+  }
+
+  async findByEmailAndDomain(email: string, domainId: string | null) {
+    if (domainId === null) {
+      return this.prisma.user.findFirst({ where: { email, domainId: null } });
+    }
+    return this.prisma.user.findFirst({ where: { email, domainId } });
   }
 
   async update(id: string, data: { name?: string; status?: UserStatus }) {

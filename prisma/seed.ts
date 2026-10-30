@@ -68,17 +68,24 @@ async function main() {
     update: {},
   });
 
-  const user = await prisma.user.upsert({
-    where: { email },
-    create: {
-      email,
-      passwordHash,
-      name,
-      status: $Enums.UserStatus.ACTIVE,
-      emailVerifiedAt: new Date(),
-    },
-    update: { passwordHash, name },
+  const existingUser = await prisma.user.findFirst({
+    where: { email, domainId: null },
   });
+
+  const user = existingUser
+    ? await prisma.user.update({
+        where: { id: existingUser.id },
+        data: { passwordHash, name },
+      })
+    : await prisma.user.create({
+        data: {
+          email,
+          passwordHash,
+          name,
+          status: $Enums.UserStatus.ACTIVE,
+          emailVerifiedAt: new Date(),
+        },
+      });
 
   await prisma.userRole.upsert({
     where: { userId_roleId: { userId: user.id, roleId: adminRole.id } },

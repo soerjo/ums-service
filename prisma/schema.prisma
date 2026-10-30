@@ -17,23 +17,40 @@ enum AuthTokenType {
   PASSWORD_RESET
 }
 
+model Domain {
+  id        String   @id @default(uuid())
+  name      String
+  origin    String   @unique
+  apiKey    String?  @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users User[]
+
+  @@map("domains")
+}
+
 model User {
   id              String     @id @default(uuid())
-  email           String     @unique
+  email           String
   passwordHash    String
   name            String?
   emailVerifiedAt DateTime?
   status          UserStatus @default(ACTIVE)
+  domainId        String?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
-  sessions   Session[]
-  userRoles  UserRole[]
-  orgMembers OrgMember[]
-  authTokens AuthToken[]
-  mfaFactors MfaFactor[]
+  domain            Domain?           @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  sessions          Session[]
+  userRoles         UserRole[]
+  orgMembers        OrgMember[]
+  authTokens        AuthToken[]
+  mfaFactors        MfaFactor[]
   passwordHistories PasswordHistory[]
 
+  @@unique([email, domainId])
   @@map("users")
 }
 
