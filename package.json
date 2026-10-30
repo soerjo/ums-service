@@ -39,6 +39,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "helmet": "^8.3.0",
+    "kafkajs": "^2.2.4",
     "nest-winston": "^1.10.2",
     "nodemailer": "^10.1.7",
     "otplib": "^13.5.0",

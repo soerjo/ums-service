@@ -5,6 +5,7 @@ export interface JwtPayload {
   roles: string[];
   orgs: string[];
   perms: string[];
+  sid?: string;
   iss?: string;
   azp?: string;
   iat?: number;

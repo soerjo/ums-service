@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { Permission } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { CreatePermissionDto } from './dto/create-permission.dto.js';
 import { UpdatePermissionDto } from './dto/update-permission.dto.js';
@@ -98,5 +99,49 @@ export class PermissionsRepository {
 
     await this.prisma.permission.delete({ where: { id } });
     return { message: 'Permission deleted successfully' };
+  }
+
+  async upsertMany(permissions: Array<{ name: string; description?: string }>) {
+    if (permissions.length === 0) {
+      return [];
+    }
+
+    if (typeof this.prisma.$transaction === 'function') {
+      return this.prisma.$transaction(
+        permissions.map((p) =>
+          this.prisma.permission.upsert({
+            where: { name: p.name },
+            create: {
+              name: p.name,
+              description: p.description ?? null,
+            },
+            update: {
+              ...(p.description !== undefined
+                ? { description: p.description }
+                : {}),
+            },
+          }),
+        ),
+      );
+    }
+
+    const results: Permission[] = [];
+    for (const p of permissions) {
+      results.push(
+        await this.prisma.permission.upsert({
+          where: { name: p.name },
+          create: {
+            name: p.name,
+            description: p.description ?? null,
+          },
+          update: {
+            ...(p.description !== undefined
+              ? { description: p.description }
+              : {}),
+          },
+        }),
+      );
+    }
+    return results;
   }
 }

@@ -11,6 +11,7 @@ import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { PermissionsService } from './permissions.service.js';
 import { CreatePermissionDto } from './dto/create-permission.dto.js';
 import { UpdatePermissionDto } from './dto/update-permission.dto.js';
+import { RegisterPermissionsDto } from './dto/register-permissions.dto.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { UMS_ADMIN_ROLE } from '../auth/auth.constants.js';
 
@@ -31,6 +32,14 @@ export class PermissionsController {
   @ApiOperation({ summary: 'Create a new permission' })
   async create(@Body() dto: CreatePermissionDto) {
     return this.permissionsService.create(dto);
+  }
+
+  @Post('register')
+  @ApiOperation({
+    summary: 'Bulk register permission manifest for downstream services',
+  })
+  async registerManifest(@Body() dto: RegisterPermissionsDto) {
+    return this.permissionsService.registerManifest(dto);
   }
 
   @Get(':id')

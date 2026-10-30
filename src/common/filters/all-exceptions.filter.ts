@@ -8,6 +8,16 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 
+export interface ProblemDetails {
+  type: string;
+  title: string;
+  status: number;
+  detail: string;
+  instance: string;
+  errors?: unknown;
+  timestamp: string;
+}
+
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
@@ -18,25 +28,28 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const request = ctx.getRequest<Request>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
-    let message: string | string[] = 'Internal server error';
+    let title = 'Internal Server Error';
+    let detail = 'An unexpected internal error occurred';
     let errors: unknown = undefined;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
+      title = exception.name || 'HTTP Error';
       const exceptionResponse = exception.getResponse();
 
       if (typeof exceptionResponse === 'string') {
-        message = exceptionResponse;
+        detail = exceptionResponse;
       } else if (
         typeof exceptionResponse === 'object' &&
         exceptionResponse !== null
       ) {
         const resp = exceptionResponse as Record<string, unknown>;
         if (Array.isArray(resp.message)) {
-          message = 'Validation error';
+          title = 'Bad Request';
+          detail = 'Validation failed for request parameters';
           errors = resp.message;
         } else {
-          message = (resp.message as string) ?? message;
+          detail = (resp.message as string) ?? exception.message;
         }
       }
     } else if (exception instanceof Error) {
@@ -44,15 +57,22 @@ export class AllExceptionsFilter implements ExceptionFilter {
     }
 
     this.logger.error(
-      `${request.method} ${request.url} - ${status} - ${JSON.stringify(message)}`,
+      `${request.method} ${request.url} - ${status} - ${detail}`,
     );
 
-    response.status(status).json({
-      statusCode: status,
-      message,
-      errors,
+    const problem: ProblemDetails = {
+      type: `https://httpstatuses.com/${status}`,
+      title,
+      status,
+      detail,
+      instance: request.url,
       timestamp: new Date().toISOString(),
-      path: request.url,
-    });
+      ...(errors ? { errors } : {}),
+    };
+
+    response
+      .status(status)
+      .setHeader('Content-Type', 'application/problem+json')
+      .json(problem);
   }
 }

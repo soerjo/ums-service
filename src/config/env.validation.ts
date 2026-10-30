@@ -146,6 +146,18 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   MAIL_LOG_FILE?: string;
+
+  @IsString()
+  @IsOptional()
+  KAFKA_BROKERS?: string;
+
+  @IsString()
+  @IsOptional()
+  KAFKA_PRODUCER_DISABLED?: string;
+
+  @IsString()
+  @IsOptional()
+  KAFKA_CLIENT_ID?: string;
 }
 
 export function validate(config: Record<string, unknown>) {

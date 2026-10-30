@@ -9,6 +9,9 @@ import { AuthService } from './auth.service.js';
 import { WebhookDispatcherService } from '../clients/webhook-dispatcher.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import { SecurityPoliciesService } from '../security-policies/security-policies.service.js';
+import { OutboxService } from '../outbox/outbox.service.js';
+import { PasswordPolicyService } from './password-policy.service.js';
+import { AccountLockoutService } from './account-lockout.service.js';
 import { hashPassword } from '../../common/utils/password.util.js';
 import { sha256Hex } from '../../common/utils/hash.util.js';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface.js';
@@ -196,6 +199,17 @@ describe('AuthService', () => {
         dispatch: jest.fn().mockResolvedValue([]),
       } as unknown as WebhookDispatcherService,
       mockSecurityPoliciesService as unknown as SecurityPoliciesService,
+      { emit: jest.fn().mockResolvedValue({}) } as unknown as OutboxService,
+      {
+        validatePasswordStrength: jest.fn(),
+        checkPasswordHistory: jest.fn().mockResolvedValue(undefined),
+        recordPasswordHistory: jest.fn().mockResolvedValue(undefined),
+      } as unknown as PasswordPolicyService,
+      {
+        checkLockout: jest.fn().mockResolvedValue(undefined),
+        recordFailedAttempt: jest.fn().mockResolvedValue(undefined),
+        resetAttempts: jest.fn().mockResolvedValue(undefined),
+      } as unknown as AccountLockoutService,
     );
   });
 
