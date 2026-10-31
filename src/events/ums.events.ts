@@ -4,6 +4,7 @@ export const UMS_TOPICS = {
   USER_SUSPENDED: 'ums.user.suspended',
   ROLE_CHANGED: 'ums.role.changed',
   SESSION_REVOKED: 'ums.session.revoked',
+  NOTIFICATION_EMAIL: 'notification.email.requested',
 } as const;
 
 export type UmsTopic = (typeof UMS_TOPICS)[keyof typeof UMS_TOPICS];

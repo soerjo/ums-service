@@ -221,9 +221,12 @@ describe('AuthService', () => {
       verify: jest.fn(),
     };
 
-    updateManySession = (prismaService as Record<string, any>).session
-      .updateMany;
-    updateSession = (prismaService as Record<string, any>).session.update;
+    const prismaMock = prismaService as {
+      session: { updateMany: jest.Mock; update: jest.Mock };
+      user: { update: jest.Mock };
+    };
+    updateManySession = prismaMock.session.updateMany;
+    updateSession = prismaMock.session.update;
     service = new AuthService(
       {
         findById,
@@ -232,7 +235,7 @@ describe('AuthService', () => {
       } as unknown as UsersRepository,
       jwtService as unknown as JwtService,
       configService as unknown as ConfigService,
-      prismaService as unknown as PrismaService,
+      prismaService as PrismaService,
       mockAuthTokensRepository as unknown as AuthTokensRepository,
       { sendPasswordReset: jest.fn(), sendEmailVerification: jest.fn() },
       {
@@ -275,8 +278,10 @@ describe('AuthService', () => {
       findById.mockResolvedValue(fullUser);
       userRoleFindMany.mockResolvedValue([]);
       orgMemberFindMany.mockResolvedValue([]);
-      const mockUpdate = (prismaService as Record<string, any>).user
-        .update as jest.Mock;
+      const prismaMock = prismaService as {
+        user: { update: jest.Mock };
+      };
+      const mockUpdate = prismaMock.user.update;
       mockUpdate.mockResolvedValue({
         ...fullUser,
         name: 'Ada Lovelace Updated',
