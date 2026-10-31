@@ -19,6 +19,8 @@ interface PendingState {
   idpId: string;
   nonce: string;
   expiresAt: number;
+  domainId?: string | null;
+  redirectUri?: string | null;
 }
 
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -63,7 +65,10 @@ export class FederationService {
     return doc as DiscoveredEndpoints;
   }
 
-  async buildAuthorizationUrl(idpId: string): Promise<string> {
+  async buildAuthorizationUrl(
+    idpId: string,
+    options?: { domainId?: string | null; redirectUri?: string | null },
+  ): Promise<string> {
     const idp = await this.repository.findActiveById(idpId);
     if (!idp) throw new NotFoundException('Identity provider not found');
     const endpoints = await this.discover(idp.issuer);
@@ -73,6 +78,8 @@ export class FederationService {
       idpId: idp.id,
       nonce,
       expiresAt: Date.now() + STATE_TTL_MS,
+      domainId: options?.domainId ?? null,
+      redirectUri: options?.redirectUri ?? null,
     });
     const url = new URL(endpoints.authorization_endpoint);
     url.searchParams.set('response_type', 'code');
@@ -126,11 +133,19 @@ export class FederationService {
     if (!userinfoRes.ok) {
       throw new BadRequestException('Userinfo request failed');
     }
-    const userinfo = (await userinfoRes.json()) as { email?: string };
+    const userinfo = (await userinfoRes.json()) as {
+      email?: string;
+      name?: string;
+    };
     if (!userinfo.email) {
       throw new BadRequestException('IdP did not return an email claim');
     }
-    return userinfo.email;
+    return {
+      email: userinfo.email,
+      name: userinfo.name,
+      domainId: pending.domainId,
+      redirectUri: pending.redirectUri,
+    };
   }
 
   async create(input: {
