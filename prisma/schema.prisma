@@ -308,6 +308,23 @@ model IdentityProvider {
   @@map("identity_providers")
 }
 
+model AuthorizationCode {
+  id            String   @id @default(uuid())
+  codeHash      String   @unique
+  clientId      String
+  userId        String
+  redirectUri   String
+  codeChallenge String?
+  scope         String?
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([clientId])
+  @@index([userId])
+  @@map("authorization_codes")
+}
+
 model SecurityPolicy {
   id                       String   @id @default("default")
   accessTokenTtlMinutes    Int      @default(15)

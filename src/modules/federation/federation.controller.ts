@@ -70,8 +70,16 @@ export class FederationBrowserController {
   @Public()
   @Get(':idpId/start')
   @ApiOperation({ summary: 'Begin OIDC login — redirects to the IdP' })
-  async start(@Param('idpId') idpId: string, @Res() res: Response) {
-    const url = await this.federation.buildAuthorizationUrl(idpId);
+  async start(
+    @Param('idpId') idpId: string,
+    @Query('domain') domain: string,
+    @Query('redirect_uri') redirectUri: string,
+    @Res() res: Response,
+  ) {
+    const url = await this.federation.buildAuthorizationUrl(idpId, {
+      domainId: domain,
+      redirectUri,
+    });
     return res.redirect(url);
   }
 
@@ -85,22 +93,39 @@ export class FederationBrowserController {
     @Res() res: Response,
   ) {
     try {
-      const email = await this.federation.exchangeCallback(idpId, code, state);
-      // v1: email must already exist and be active (explicit linking policy).
-      const tokens = await this.authService.federatedLogin(email, {
-        ip: res.req.ip,
-        userAgent: res.req.headers['user-agent'],
-      });
-      const webUrl = (this.config.get<string>('APP_WEB_URL') ?? '/').replace(
-        /\/$/,
-        '',
+      const idpResult = await this.federation.exchangeCallback(
+        idpId,
+        code,
+        state,
       );
+      const tokens = await this.authService.federatedLogin(
+        idpResult.email,
+        {
+          ip: res.req.ip,
+          userAgent: res.req.headers['user-agent'],
+        },
+        idpResult.domainId,
+        { name: idpResult.name },
+      );
+
       res.cookie('ums_refresh_token', tokens.refreshToken, {
         httpOnly: true,
         sameSite: 'lax',
         secure: process.env.NODE_ENV === 'production',
         path: '/api/auth',
       });
+
+      if (idpResult.redirectUri) {
+        const targetUrl = new URL(idpResult.redirectUri);
+        targetUrl.searchParams.set('accessToken', tokens.accessToken);
+        targetUrl.searchParams.set('refreshToken', tokens.refreshToken);
+        return res.redirect(targetUrl.toString());
+      }
+
+      const webUrl = (this.config.get<string>('APP_WEB_URL') ?? '/').replace(
+        /\/$/,
+        '',
+      );
       return res.redirect(`${webUrl}/dashboard`);
     } catch {
       const loginUrl = this.config.get<string>('APP_WEB_URL') ?? '/';

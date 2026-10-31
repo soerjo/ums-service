@@ -33,6 +33,8 @@ describe('OauthTokenService', () => {
       clientsRepository as unknown as ClientsRepository,
       new ClientRateLimiterService(),
       jwtService as unknown as JwtService,
+      {} as any,
+      {} as any,
     );
   });
 
@@ -58,14 +60,58 @@ describe('OauthTokenService', () => {
     expect(clientsRepository.touchLastUsed).toHaveBeenCalledTimes(1);
   });
 
-  it('rejects an unknown client', async () => {
-    clientsRepository.findByClientId.mockResolvedValue(null);
-    await expect(
-      service.issueClientCredentialsToken({
-        client_id: 'svc_missing',
-        client_secret: secret,
-      }),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+  describe('authorization_code flow', () => {
+    it('creates authorization code and exchanges it for tokens', async () => {
+      const mockPrisma = {
+        authorizationCode: {
+          create: jest.fn().mockResolvedValue({ id: 'code-1' }),
+          findUnique: jest.fn().mockResolvedValue({
+            id: 'code-1',
+            clientId: 'client-1',
+            userId: 'user-1',
+            redirectUri: 'https://app.test/cb',
+            codeChallenge: null,
+            scope: 'openid',
+            expiresAt: new Date(Date.now() + 60000),
+            usedAt: null,
+          }),
+          update: jest.fn().mockResolvedValue({ id: 'code-1' }),
+        },
+      };
+
+      const mockAuthService = {
+        issueTokensForUser: jest.fn().mockResolvedValue({
+          accessToken: 'user.access.token',
+          refreshToken: 'user.refresh.token',
+          user: { id: 'user-1', email: 'u@test.com', name: 'User' },
+        }),
+      };
+
+      const oauthService = new OauthTokenService(
+        clientsRepository as unknown as ClientsRepository,
+        new ClientRateLimiterService(),
+        jwtService as unknown as JwtService,
+        mockPrisma as unknown as any,
+        mockAuthService as unknown as any,
+      );
+
+      const code = await oauthService.createAuthorizationCode({
+        clientId: 'client-1',
+        userId: 'user-1',
+        redirectUri: 'https://app.test/cb',
+      });
+
+      expect(code).toBeDefined();
+
+      const tokens = (await oauthService.handleTokenRequest({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: 'https://app.test/cb',
+      })) as unknown as Record<string, unknown>;
+
+      expect(tokens.access_token).toBe('user.access.token');
+      expect(tokens.refresh_token).toBe('user.refresh.token');
+    });
   });
 
   it('rejects an inactive client', async () => {

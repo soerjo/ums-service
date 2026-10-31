@@ -349,23 +349,55 @@ export class AuthService {
   }
 
   /**
-   * Signs in an existing, active user identified by a federated (OIDC) email.
-   * v1 policy: no auto-provisioning — the email must already match an ACTIVE
-   * user (explicit linking). See platform-docs Q5 / ADR 0006.
+   * Signs in an existing active user or auto-provisions a new active user
+   * for the given domain (OIDC federation / Google login).
    */
   async federatedLogin(
     email: string,
     meta: RequestMeta = {},
+    domainId?: string | null,
+    profile?: { name?: string },
   ): Promise<{
     accessToken: string;
     refreshToken: string;
     user: AuthUser;
   }> {
-    const user = await this.usersRepository
-      .findByEmail(email)
+    let user = await this.usersRepository
+      .findByEmailAndDomain(email, domainId ?? null)
       .catch(() => null);
-    if (!user || user.status !== $Enums.UserStatus.ACTIVE) {
-      throw new UnauthorizedException('No linked account for this email');
+
+    if (!user && domainId) {
+      // Fallback search: check if global user exists
+      user = await this.usersRepository
+        .findByEmailAndDomain(email, null)
+        .catch(() => null);
+    }
+
+    if (!user) {
+      // Auto-provision user for this domain
+      const dummyPasswordHash = await hashPassword(randomUUID());
+      user = await this.prisma.user.create({
+        data: {
+          email,
+          name: profile?.name ?? null,
+          passwordHash: dummyPasswordHash,
+          domainId: domainId ?? null,
+          status: $Enums.UserStatus.ACTIVE,
+          emailVerifiedAt: new Date(),
+        },
+      });
+
+      await this.auditService.log({
+        action: 'user.auto_provisioned',
+        actorId: user.id,
+        severity: 'info',
+        ip: meta.ip ?? undefined,
+        userAgent: meta.userAgent ?? undefined,
+      });
+    }
+
+    if (user.status !== $Enums.UserStatus.ACTIVE) {
+      throw new UnauthorizedException('User is not active');
     }
     return this.issueTokensForUser(user.id, meta);
   }
