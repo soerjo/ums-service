@@ -88,6 +88,10 @@ export class OutboxRelayService implements OnModuleInit, OnModuleDestroy {
       case 'ums.session.revoked':
       case UMS_TOPICS.SESSION_REVOKED:
         return UMS_TOPICS.SESSION_REVOKED;
+      case 'NOTIFICATION_EMAIL':
+      case 'notification.email.requested':
+      case UMS_TOPICS.NOTIFICATION_EMAIL:
+        return UMS_TOPICS.NOTIFICATION_EMAIL;
       default:
         return null;
     }

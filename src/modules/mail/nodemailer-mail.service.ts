@@ -84,10 +84,26 @@ export class NodemailerMailService implements MailSender {
     token: string,
     url: string,
   ): Promise<MailSendResult> {
-    const subject = 'Reset your password';
     const link = `${url}?token=${encodeURIComponent(token)}`;
-    const text = `You requested a password reset. Open this link to choose a new password (valid for the configured TTL):\n${link}\n\nIf you did not request this, you can ignore this email.`;
-    const html = `<p>You requested a password reset.</p><p><a href="${link}">Choose a new password</a></p><p>If you did not request this, you can ignore this email.</p>`;
+    const eventPayload = {
+      event: 'AUTH_PASSWORD_RESET_REQUESTED',
+      recipient: { email },
+      template: 'auth-password-reset',
+      data: {
+        resetUrl: link,
+        token,
+        expiresInMinutes: 60,
+      },
+    };
+
+    this.logger.log({
+      action: 'mail.outbox-dispatch',
+      ...eventPayload,
+    });
+
+    const subject = 'Reset your password';
+    const text = `You requested a password reset. Open this link:\n${link}`;
+    const html = `<p>You requested a password reset: <a href="${link}">${link}</a></p>`;
     return this.deliver(email, subject, text, html, link);
   }
 
@@ -96,10 +112,26 @@ export class NodemailerMailService implements MailSender {
     token: string,
     url: string,
   ): Promise<MailSendResult> {
-    const subject = 'Verify your email';
     const link = `${url}?token=${encodeURIComponent(token)}`;
-    const text = `Confirm your email address by opening this link (valid for the configured TTL):\n${link}\n\nIf you did not register, you can ignore this email.`;
-    const html = `<p>Welcome!</p><p><a href="${link}">Verify your email</a></p><p>If you did not register, you can ignore this email.</p>`;
+    const eventPayload = {
+      event: 'AUTH_EMAIL_VERIFICATION_REQUESTED',
+      recipient: { email },
+      template: 'auth-email-verification',
+      data: {
+        verifyUrl: link,
+        token,
+        expiresInHours: 24,
+      },
+    };
+
+    this.logger.log({
+      action: 'mail.outbox-dispatch',
+      ...eventPayload,
+    });
+
+    const subject = 'Verify your email';
+    const text = `Confirm your email by opening this link:\n${link}`;
+    const html = `<p>Confirm your email: <a href="${link}">${link}</a></p>`;
     return this.deliver(email, subject, text, html, link);
   }
 
