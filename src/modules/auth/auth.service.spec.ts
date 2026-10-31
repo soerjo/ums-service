@@ -4,7 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { UserStatus } from '@prisma/client';
 import type { User } from '@prisma/client';
 import { UsersRepository } from '../users/users.repository.js';
-import { PrismaService } from '../../prisma/prisma.service.js';
+import type { PrismaService } from '../../prisma/prisma.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import { AuthService } from './auth.service.js';
 import { WebhookDispatcherService } from '../clients/webhook-dispatcher.service.js';
@@ -41,6 +41,7 @@ interface SessionUpdateManyArgs {
 
 describe('AuthService', () => {
   let service: AuthService;
+  let prismaService: unknown;
   let sessions: FakeSession[];
   let findById: jest.Mock;
   let findByEmail: jest.Mock;
@@ -66,6 +67,8 @@ describe('AuthService', () => {
     id: 'user-1',
     email: 'user@example.com',
     name: 'Ada Lovelace',
+    avatarUrl: null,
+    phone: null,
     roles: ['ums:admin'],
     orgs: ['pesanggrahan'],
     perms: ['users:read'],
@@ -108,7 +111,7 @@ describe('AuthService', () => {
       }),
     };
 
-    const prisma = {
+    prismaService = {
       session: {
         create: jest.fn(({ data }: { data: FakeSession }) => {
           const session: FakeSession = {
@@ -160,6 +163,7 @@ describe('AuthService', () => {
       orgMember: { findMany: orgMemberFindMany },
       user: {
         create: createUser,
+        update: jest.fn(),
         findUnique: jest.fn(),
       },
       securityPolicy: {
@@ -217,8 +221,9 @@ describe('AuthService', () => {
       verify: jest.fn(),
     };
 
-    updateManySession = prisma.session.updateMany;
-    updateSession = prisma.session.update;
+    updateManySession = (prismaService as Record<string, any>).session
+      .updateMany;
+    updateSession = (prismaService as Record<string, any>).session.update;
     service = new AuthService(
       {
         findById,
@@ -227,7 +232,7 @@ describe('AuthService', () => {
       } as unknown as UsersRepository,
       jwtService as unknown as JwtService,
       configService as unknown as ConfigService,
-      prisma as unknown as PrismaService,
+      prismaService as unknown as PrismaService,
       mockAuthTokensRepository as unknown as AuthTokensRepository,
       { sendPasswordReset: jest.fn(), sendEmailVerification: jest.fn() },
       {
@@ -256,6 +261,40 @@ describe('AuthService', () => {
   });
 
   describe('login', () => {
+    it('returns the profile for an active user', async () => {
+      findById.mockResolvedValue(fullUser);
+      userRoleFindMany.mockResolvedValue([]);
+      orgMemberFindMany.mockResolvedValue([]);
+
+      const result = await service.me(fullUser.id);
+      expect(result.id).toBe(fullUser.id);
+      expect(result.email).toBe(fullUser.email);
+    });
+
+    it('updates user profile fields and returns updated user', async () => {
+      findById.mockResolvedValue(fullUser);
+      userRoleFindMany.mockResolvedValue([]);
+      orgMemberFindMany.mockResolvedValue([]);
+      const mockUpdate = (prismaService as Record<string, any>).user
+        .update as jest.Mock;
+      mockUpdate.mockResolvedValue({
+        ...fullUser,
+        name: 'Ada Lovelace Updated',
+        avatarUrl: 'https://minio.test/avatar.png',
+        phone: '+62812345678',
+      });
+
+      const result = await service.updateProfile(fullUser.id, {
+        name: 'Ada Lovelace Updated',
+        avatarUrl: 'https://minio.test/avatar.png',
+        phone: '+62812345678',
+      });
+
+      expect(result.name).toBe('Ada Lovelace Updated');
+      expect(result.avatarUrl).toBe('https://minio.test/avatar.png');
+      expect(result.phone).toBe('+62812345678');
+    });
+
     it('stores only the sha256 hash of the refresh token', async () => {
       const result = await service.login(authUser);
 

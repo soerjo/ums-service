@@ -1,13 +1,14 @@
 import {
-  Controller,
-  Post,
   Body,
-  UseGuards,
-  Req,
+  Controller,
   Get,
   HttpCode,
   HttpStatus,
+  Patch,
+  Post,
+  Req,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -20,6 +21,7 @@ import { Throttle } from '@nestjs/throttler';
 import type { CookieOptions, Request, Response } from 'express';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface.js';
 import { parseCookieHeader } from '../../common/utils/cookie.util.js';
+import { UpdateProfileDto } from './dto/update-profile.dto.js';
 import { AuthService, type RequestMeta } from './auth.service.js';
 import { MfaService } from '../mfa/mfa.service.js';
 import { RegisterDto } from './dto/register.dto.js';
@@ -128,6 +130,17 @@ export class AuthController {
   @ApiOkResponse({ description: 'Profile derived from the user record' })
   async me(@CurrentUser('id') userId: string) {
     return this.authService.me(userId);
+  }
+
+  @Patch('me')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update profile (name, avatarUrl, phone)' })
+  @ApiOkResponse({ description: 'Updated user profile' })
+  async updateMe(
+    @CurrentUser('id') userId: string,
+    @Body() dto: UpdateProfileDto,
+  ) {
+    return this.authService.updateProfile(userId, dto);
   }
 
   @Public()

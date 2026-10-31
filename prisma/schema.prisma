@@ -36,6 +36,8 @@ model User {
   email           String
   passwordHash    String
   name            String?
+  avatarUrl       String?
+  phone           String?
   emailVerifiedAt DateTime?
   status          UserStatus @default(ACTIVE)
   domainId        String?

@@ -137,6 +137,8 @@ export class AuthService {
       id: user.id,
       email: user.email,
       name: user.name,
+      avatarUrl: user.avatarUrl ?? null,
+      phone: user.phone ?? null,
       roles,
       orgs,
       perms,
@@ -164,6 +166,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       name: user.name,
+      picture: user.avatarUrl ?? null,
       roles: user.roles,
       orgs: user.orgs,
       perms: user.perms,
@@ -528,6 +531,33 @@ export class AuthService {
       actorId: userId,
       metadata: { reason: 'logout-all', count: result.count },
     });
+  }
+
+  async updateProfile(
+    userId: string,
+    data: { name?: string; avatarUrl?: string; phone?: string },
+  ): Promise<AuthUser> {
+    const user = await this.usersRepository.findById(userId).catch(() => null);
+    if (!user || user.status !== $Enums.UserStatus.ACTIVE) {
+      throw new UnauthorizedException('User is not active');
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(data.name !== undefined ? { name: data.name } : {}),
+        ...(data.avatarUrl !== undefined ? { avatarUrl: data.avatarUrl } : {}),
+        ...(data.phone !== undefined ? { phone: data.phone } : {}),
+      },
+    });
+
+    await this.auditService.log({
+      action: 'user.profile_updated',
+      actorId: userId,
+      metadata: { fields: Object.keys(data) },
+    });
+
+    return this.toAuthUser(updated);
   }
 
   async me(userId: string): Promise<AuthUser> {
