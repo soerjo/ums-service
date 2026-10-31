@@ -1,21 +1,46 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  schemas  = ["identity", "auth", "security", "integration"]
 }
 
 enum UserStatus {
   ACTIVE
   BLOCKED
+
+  @@schema("identity")
 }
 
 enum AuthTokenType {
   EMAIL_VERIFY
   PASSWORD_RESET
+
+  @@schema("auth")
 }
+
+enum WebhookDeliveryStatus {
+  SUCCESS
+  FAILED
+
+  @@schema("integration")
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSED
+  FAILED
+
+  @@schema("integration")
+}
+
+// ==========================================
+// 1. IDENTITY SCHEMA
+// ==========================================
 
 model Domain {
   id        String   @id @default(uuid())
@@ -28,6 +53,7 @@ model Domain {
 
   users User[]
 
+  @@schema("identity")
   @@map("domains")
 }
 
@@ -53,8 +79,93 @@ model User {
   passwordHistories PasswordHistory[]
 
   @@unique([email, domainId])
+  @@schema("identity")
   @@map("users")
 }
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@schema("identity")
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rolePermissions RolePermission[]
+
+  @@schema("identity")
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  assignedAt   DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@schema("identity")
+  @@map("role_permissions")
+}
+
+model UserRole {
+  userId     String
+  roleId     String
+  assignedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@schema("identity")
+  @@map("user_roles")
+}
+
+model Organization {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members OrgMember[]
+
+  @@schema("identity")
+  @@map("organizations")
+}
+
+model OrgMember {
+  orgId    String
+  userId   String
+  role     String   @default("member")
+  joinedAt DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([orgId, userId])
+  @@schema("identity")
+  @@map("org_members")
+}
+
+// ==========================================
+// 2. AUTH SCHEMA
+// ==========================================
 
 model Session {
   id             String    @id @default(uuid())
@@ -72,81 +183,8 @@ model Session {
 
   @@index([userId])
   @@index([family])
+  @@schema("auth")
   @@map("sessions")
-}
-
-model Role {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  userRoles       UserRole[]
-  rolePermissions RolePermission[]
-
-  @@map("roles")
-}
-
-model Permission {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  rolePermissions RolePermission[]
-
-  @@map("permissions")
-}
-
-model RolePermission {
-  roleId       String
-  permissionId String
-  assignedAt   DateTime @default(now())
-
-  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
-
-  @@id([roleId, permissionId])
-  @@map("role_permissions")
-}
-
-model UserRole {
-  userId     String
-  roleId     String
-  assignedAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
-
-  @@id([userId, roleId])
-  @@map("user_roles")
-}
-
-model Organization {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  members OrgMember[]
-
-  @@map("organizations")
-}
-
-model OrgMember {
-  orgId    String
-  userId   String
-  role     String   @default("member")
-  joinedAt DateTime @default(now())
-
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@id([orgId, userId])
-  @@map("org_members")
 }
 
 model AuthToken {
@@ -161,10 +199,32 @@ model AuthToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, type])
+  @@schema("auth")
   @@map("auth_tokens")
 }
 
-/// Audit log of security-relevant actions (ADR 0007: 30-day retention).
+model AuthorizationCode {
+  id            String    @id @default(uuid())
+  codeHash      String    @unique
+  clientId      String
+  userId        String
+  redirectUri   String
+  codeChallenge String?
+  scope         String?
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([clientId])
+  @@index([userId])
+  @@schema("auth")
+  @@map("authorization_codes")
+}
+
+// ==========================================
+// 3. SECURITY SCHEMA
+// ==========================================
+
 model AuditLog {
   id          String   @id @default(uuid())
   actorId     String?
@@ -180,6 +240,7 @@ model AuditLog {
 
   @@index([createdAt])
   @@index([action])
+  @@schema("security")
   @@map("audit_logs")
 }
 
@@ -195,35 +256,8 @@ model MfaFactor {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@schema("security")
   @@map("mfa_factors")
-}
-
-enum WebhookDeliveryStatus {
-  SUCCESS
-  FAILED
-}
-
-enum OutboxStatus {
-  PENDING
-  PROCESSED
-  FAILED
-}
-
-model OutboxEvent {
-  id            String       @id @default(uuid())
-  aggregateType String       @map("aggregate_type")
-  aggregateId   String       @map("aggregate_id")
-  eventType     String       @map("event_type")
-  payload       Json
-  status        OutboxStatus @default(PENDING)
-  retryCount    Int          @default(0) @map("retry_count")
-  error         String?
-  processedAt   DateTime?    @map("processed_at")
-  createdAt     DateTime     @default(now()) @map("created_at")
-
-  @@index([status, createdAt])
-  @@index([aggregateType, aggregateId])
-  @@map("outbox_events")
 }
 
 model PasswordHistory {
@@ -235,21 +269,42 @@ model PasswordHistory {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+  @@schema("security")
   @@map("password_histories")
 }
 
 model LoginAttempt {
-  id         String    @id @default(uuid())
-  identifier String
-  ip         String?
-  attempts   Int       @default(1)
-  lockedUntil DateTime? @map("locked_until")
-  lastAttemptAt DateTime @default(now()) @map("last_attempt_at")
+  id            String    @id @default(uuid())
+  identifier    String
+  ip            String?
+  attempts      Int       @default(1)
+  lockedUntil   DateTime? @map("locked_until")
+  lastAttemptAt DateTime  @default(now()) @map("last_attempt_at")
 
   @@unique([identifier])
   @@index([ip])
+  @@schema("security")
   @@map("login_attempts")
 }
+
+model SecurityPolicy {
+  id                       String   @id @default("default")
+  accessTokenTtlMinutes    Int      @default(15)
+  refreshTokenTtlDays      Int      @default(30)
+  maxConcurrentSessions    Int      @default(5)
+  requireMfaForAdmins      Boolean  @default(true)
+  enableAuditRetentionDays Int      @default(30)
+  allowPasswordReset       Boolean  @default(true)
+  updatedAt                DateTime @updatedAt
+  createdAt                DateTime @default(now())
+
+  @@schema("security")
+  @@map("security_policies")
+}
+
+// ==========================================
+// 4. INTEGRATION SCHEMA
+// ==========================================
 
 model ApiClient {
   id                 String    @id @default(uuid())
@@ -262,6 +317,7 @@ model ApiClient {
   active             Boolean   @default(true)
   createdAt          DateTime  @default(now())
 
+  @@schema("integration")
   @@map("api_clients")
 }
 
@@ -276,6 +332,7 @@ model WebhookEndpoint {
 
   deliveries WebhookDelivery[]
 
+  @@schema("integration")
   @@map("webhook_endpoints")
 }
 
@@ -292,10 +349,10 @@ model WebhookDelivery {
   endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
 
   @@index([endpointId, createdAt])
+  @@schema("integration")
   @@map("webhook_deliveries")
 }
 
-/// OIDC identity provider configuration (ADR 0006 — federation, v1).
 model IdentityProvider {
   id              String   @id @default(uuid())
   name            String   @unique
@@ -307,36 +364,24 @@ model IdentityProvider {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  @@schema("integration")
   @@map("identity_providers")
 }
 
-model AuthorizationCode {
-  id            String   @id @default(uuid())
-  codeHash      String   @unique
-  clientId      String
-  userId        String
-  redirectUri   String
-  codeChallenge String?
-  scope         String?
-  expiresAt     DateTime
-  usedAt        DateTime?
-  createdAt     DateTime @default(now())
+model OutboxEvent {
+  id            String       @id @default(uuid())
+  aggregateType String       @map("aggregate_type")
+  aggregateId   String       @map("aggregate_id")
+  eventType     String       @map("event_type")
+  payload       Json
+  status        OutboxStatus @default(PENDING)
+  retryCount    Int          @default(0) @map("retry_count")
+  error         String?
+  processedAt   DateTime?    @map("processed_at")
+  createdAt     DateTime     @default(now()) @map("created_at")
 
-  @@index([clientId])
-  @@index([userId])
-  @@map("authorization_codes")
-}
-
-model SecurityPolicy {
-  id                       String   @id @default("default")
-  accessTokenTtlMinutes    Int      @default(15)
-  refreshTokenTtlDays      Int      @default(30)
-  maxConcurrentSessions    Int      @default(5)
-  requireMfaForAdmins      Boolean  @default(true)
-  enableAuditRetentionDays Int      @default(30)
-  allowPasswordReset       Boolean  @default(true)
-  updatedAt                DateTime @updatedAt
-  createdAt                DateTime @default(now())
-
-  @@map("security_policies")
+  @@index([status, createdAt])
+  @@index([aggregateType, aggregateId])
+  @@schema("integration")
+  @@map("outbox_events")
 }
