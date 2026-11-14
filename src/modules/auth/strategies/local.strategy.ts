@@ -22,7 +22,6 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
     const rawDomain =
       req.headers['x-domain-id'] ||
       req.headers['x-domain-origin'] ||
-      req.headers['origin'] ||
       body.domain;
     const domainIdentifier = (
       Array.isArray(rawDomain) ? rawDomain[0] : rawDomain
